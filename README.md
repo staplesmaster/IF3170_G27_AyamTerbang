@@ -29,7 +29,7 @@ docker compose logs -f app
 ## Jalankan file Python lain
 
 ```sh
-docker compose run --rm app python src/nama_file.py
+docker compose exec app python src/nama_file.py
 ```
 
 Ganti `nama_file.py` dengan nama file yang ingin dijalankan.
