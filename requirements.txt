@@ -1,0 +1,5 @@
+# Add dependencies used by your other Python apps here, then rebuild the image.
+viser==1.1.1
+numpy
+matplotlib
+pandas

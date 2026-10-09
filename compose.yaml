@@ -1,0 +1,13 @@
+services:
+  app:
+    build: .
+    init: true
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    environment:
+      VISER_HOST: "0.0.0.0"
+      VISER_PORT: "8080"
+    ports:
+      - "127.0.0.1:${VISER_PORT:-8080}:8080"
+    volumes:
+      - ./src:/app/src:ro
+      - ./output:/app/output

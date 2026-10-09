@@ -1,0 +1,10 @@
+.git
+.aws
+.venv
+venv
+**/__pycache__
+**/*.py[cod]
+.env
+.env.*
+output
+docs
