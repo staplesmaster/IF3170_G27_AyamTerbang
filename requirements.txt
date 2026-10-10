@@ -3,3 +3,4 @@ viser==1.1.1
 numpy
 matplotlib
 pandas
+pydantic
