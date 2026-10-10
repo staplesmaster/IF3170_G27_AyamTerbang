@@ -21,4 +21,4 @@ USER app
 
 EXPOSE 8080
 
-CMD ["python", "src/main.py"]
+CMD ["python", "-m", "src.main"]
