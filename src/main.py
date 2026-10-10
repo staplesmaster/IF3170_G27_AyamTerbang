@@ -22,6 +22,11 @@ def main() -> None:
     # Create GUI controls
     load_config = server.gui.add_upload_button("Load config", hint="Upload file konfigurasi (JSON)")
 
+    @load_config.on_upload
+    def _(event: viser.GuiEvent) -> None:
+        file = event.target.value
+        # parse
+        problem = parser.parse(file)
     
     algorithm_dropdown = server.gui.add_dropdown(
         "Algoritma Local Search",
