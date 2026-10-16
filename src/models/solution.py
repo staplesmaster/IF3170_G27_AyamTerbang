@@ -10,7 +10,7 @@ class Placement:
 
 
 @dataclass(frozen=True)
-class Solution:
+class State:
     placements: tuple[Placement, ...] = ()
 
     @property

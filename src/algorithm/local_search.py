@@ -3,25 +3,25 @@ from collections.abc import Iterable
 
 from ..models.evaluator import Evaluator
 from ..models.problem import Problem
-from ..models.solution import Solution
+from ..models.solution import State
 from .base import Algorithm
 
 
 class Move(ABC):
     @abstractmethod
-    def apply(self, solution: Solution) -> Solution:
+    def apply(self, solution: State) -> State:
         raise NotImplementedError
 
 
 class Neighborhood(ABC):
     @abstractmethod
-    def moves(self, problem: Problem, solution: Solution) -> Iterable[Move]:
+    def moves(self, problem: Problem, solution: State) -> Iterable[Move]:
         raise NotImplementedError
 
 
-class InitialSolutionFactory(ABC):
+class InitialStateFactory(ABC):
     @abstractmethod
-    def create(self, problem: Problem) -> Solution:
+    def create(self, problem: Problem) -> State:
         raise NotImplementedError
 
 
@@ -30,12 +30,12 @@ class LocalSearchAlgorithm(Algorithm):
         self,
         evaluator: Evaluator,
         neighborhood: Neighborhood,
-        initial_solutions: InitialSolutionFactory,
+        initial_solutions: InitialStateFactory,
     ) -> None:
         self.evaluator = evaluator
         self.neighborhood = neighborhood
         self.initial_solutions = initial_solutions
 
     @abstractmethod
-    def solve(self, problem: Problem) -> Solution:
+    def solve(self, problem: Problem) -> State:
         raise NotImplementedError

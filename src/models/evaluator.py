@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from .objective import Objective
 from .problem import Problem
-from .solution import Solution
+from .solution import State
 from .validator import PackingValidator
 
 
@@ -17,7 +17,7 @@ class Evaluator:
         self.objective = objective
         self.validator = validator
 
-    def evaluate(self, problem: Problem, solution: Solution) -> Evaluation:
+    def evaluate(self, problem: Problem, solution: State) -> Evaluation:
         feasible = self.validator.validate(problem, solution)
         value = self.objective.value(problem, solution) if feasible else float("-inf")
         return Evaluation(feasible, value)
