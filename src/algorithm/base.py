@@ -8,3 +8,7 @@ class Algorithm(ABC):
     @abstractmethod
     def solve(self, problem: Problem) -> State:
         raise NotImplementedError
+
+    @abstractmethod
+    def getName(self) -> str:
+        raise NotImplementedError
