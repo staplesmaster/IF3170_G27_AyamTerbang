@@ -2,6 +2,7 @@ from ..models.problem import Problem
 from ..models.package import Package
 from ..models.truck import Truck
 from .input import PackageConfig, TruckConfig, ProblemConfig
+from pydantic import ValidationError
 
 class Parser:
     def _parse_trucks(self, configs: list[TruckConfig]) -> tuple[Truck, ...]:
@@ -31,9 +32,12 @@ class Parser:
         return tuple(packages)
 
     def parse(self, source: object) -> Problem:
-        payload = getattr(source, "content", source)
-        config = ProblemConfig.model_validate_json(payload)
-        return Problem(
-            packages=self._parse_packages(config.packages),
-            trucks=self._parse_trucks(config.trucks),
-        )
+        try:
+            payload = getattr(source, "content", source)
+            config = ProblemConfig.model_validate_json(payload)
+            return Problem(
+                packages=self._parse_packages(config.packages),
+                trucks=self._parse_trucks(config.trucks),
+            )
+        except ValidationError:
+            raise RuntimeError
