@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 
-from ..models.evaluator import Evaluator
+from ..models.objective import Objective
 from ..models.problem import Problem
 from ..models.solution import State
 from .base import Algorithm
@@ -9,33 +9,30 @@ from .base import Algorithm
 
 class Move(ABC):
     @abstractmethod
-    def apply(self, solution: State) -> State:
+    def apply(self, state: State) -> State:
         raise NotImplementedError
 
 
 class Neighborhood(ABC):
     @abstractmethod
-    def moves(self, problem: Problem, solution: State) -> Iterable[Move]:
-        raise NotImplementedError
-
-
-class InitialStateFactory(ABC):
-    @abstractmethod
-    def create(self, problem: Problem) -> State:
+    def moves(self, problem: Problem, state: State) -> Iterable[Move]:
+        """Langkah neighbor (move) yang diperbolehkan tiap iterasi
+        """
         raise NotImplementedError
 
 
 class LocalSearchAlgorithm(Algorithm):
+    objective: Objective
+    neighborhood: Neighborhood
+
     def __init__(
         self,
-        evaluator: Evaluator,
-        neighborhood: Neighborhood,
-        initial_solutions: InitialStateFactory,
+        objective: Objective,
+        neighborhood: Neighborhood
     ) -> None:
-        self.evaluator = evaluator
+        self.objective = objective
         self.neighborhood = neighborhood
-        self.initial_solutions = initial_solutions
 
     @abstractmethod
-    def solve(self, problem: Problem, options: dict[str]) -> State:
+    def solve(self, problem: Problem, state: State, options: dict[str]) -> State:
         raise NotImplementedError
