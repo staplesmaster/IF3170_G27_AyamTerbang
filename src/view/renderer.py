@@ -13,6 +13,7 @@ class Renderer:
         self.server = server
         self.truckHandles = []
         self.packageHandles = {}
+        self.problem = None
 
     def _cleanup(self):
         for h in self.truckHandles:
@@ -22,14 +23,14 @@ class Renderer:
                 h.remove()
             self.packageHandles.clear()
 
-    def _render_trucks(self, problem: Problem):
+    def _render_trucks(self):
         gap = 2.0
         wallThickness = 0.2
-        totalWidth = sum(t.dimensions["w"] for t in problem.trucks)
-        totalWidth += gap * max(len(problem.trucks) - 1, 0)
+        totalWidth = sum(t.dimensions["w"] for t in self.problem.trucks)
+        totalWidth += gap * max(len(self.problem.trucks) - 1, 0)
         truckX = -totalWidth / 2
 
-        for t in problem.trucks:
+        for t in self.problem.trucks:
             width = t.dimensions["w"]
             truckLength = t.dimensions["l"]
             truckHeight = t.dimensions["h"]
@@ -70,7 +71,7 @@ class Renderer:
         if self.problem != problem:
             self._cleanup()
             self.problem = problem
-            self._render_trucks(problem)
+            self._render_trucks()
             self._render_packages(state)
         else:
             self._move_packages(state)
