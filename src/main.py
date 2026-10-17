@@ -7,6 +7,7 @@ import viser
 
 from .view.control import Control
 from .repository.parser import Parser
+from .algorithm.simulated_annealing import SimulatedAnnealing
 
 
 def main() -> None:
@@ -15,7 +16,7 @@ def main() -> None:
 
     server = viser.ViserServer()
     parser = Parser()
-    algorithms = []
+    algorithms = [SimulatedAnnealing()]
 
     control = Control(server, parser, algorithms)
 
