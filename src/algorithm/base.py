@@ -23,7 +23,7 @@ class Algorithm(ABC):
         return []
 
     @abstractmethod
-    def solve(self, problem: Problem, options: dict[str]) -> State:
+    def solve(self, problem: Problem, state: State, options: dict[str]) -> State:
         raise NotImplementedError
 
     @abstractmethod
