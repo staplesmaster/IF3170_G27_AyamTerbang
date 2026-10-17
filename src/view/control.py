@@ -2,6 +2,7 @@ import viser
 from ..repository.parser import Parser
 from .renderer import Renderer
 from ..algorithm.base import Algorithm
+from ..models.solution import *
 
 class Control:
 
@@ -18,7 +19,7 @@ class Control:
         self.server = server
         self.parser = parser
         self.algorithms = algorithms
-        self.renderer = Renderer()
+        self.renderer = Renderer(server)
 
         self.uploadButton = self.server.gui.add_upload_button("Load config", hint="Upload file konfigurasi (JSON)")
 
@@ -28,7 +29,8 @@ class Control:
             # parse
             try:
                 problem = self.parser.parse(file)
-                self.renderer.render(problem, )
+                initial_state = State.from_problem(problem)
+                self.renderer.render(problem, initial_state)
             except RuntimeError:
                 # nanti ganti error handlingnya
                 print("error parsing file")
