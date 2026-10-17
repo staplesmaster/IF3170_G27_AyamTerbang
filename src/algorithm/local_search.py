@@ -37,5 +37,5 @@ class LocalSearchAlgorithm(Algorithm):
         self.initial_solutions = initial_solutions
 
     @abstractmethod
-    def solve(self, problem: Problem) -> State:
+    def solve(self, problem: Problem, options: dict[str]) -> State:
         raise NotImplementedError
