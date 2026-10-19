@@ -19,7 +19,7 @@ class RandomRestartHC(LocalSearchAlgorithm):
 
     def get_options(self) -> list[AlgorithmOption]:
         return [
-            AlgorithmOption("max_restart", "Maximum restarts", "number", 10, minimum=0, step=1, ),
+            AlgorithmOption("max_restart", "Maximum restarts", "number", 10, minimum=0, step=1),
         ]
 
     def solve(self, problem: Problem, state: State, options: dict[str]) -> Result:

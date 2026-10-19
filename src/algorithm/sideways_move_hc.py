@@ -17,7 +17,7 @@ class SidewaysMoveHillClimbing(LocalSearchAlgorithm):
 
     def get_options(self) -> list[AlgorithmOption]:
         return [
-            AlgorithmOption("max_sideways_moves","Maximum consecutive sideways moves", "number", 20, minimum=0, step=1,),
+            AlgorithmOption("max_sideways_moves","Maximum consecutive sideways moves", "number", 20, minimum=0, step=1),
         ]
 
     def solve(self, problem: Problem, state: State, options: dict[str]) -> Result:
