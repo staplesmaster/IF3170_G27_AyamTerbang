@@ -3,6 +3,7 @@ from ..models.problem import Problem
 from ..models.solution import Placement, State
 from collections.abc import Iterable
 from dataclasses import replace
+import secrets
 
 class Swap(Move):
     package_a_id: str
@@ -35,8 +36,8 @@ class Swap(Move):
 class ChangePlacement(Move):
     """Untuk Pack, Unpack, sama pindah koordinat/truck"""
     package_id: str
-    new_placement: Placement
-    def __init__(self, package_id: str, placement: Placement):
+    new_placement: Placement | None
+    def __init__(self, package_id: str, placement: Placement | None):
         self.package_id = package_id
         self.new_placement = placement
 
@@ -76,16 +77,72 @@ class LocalNeighbor(Neighborhood):
         3. Merotasi paket 90° terhadap sumbu x, y, atau z
         """
 
-        move_list = list[Move]()
+        package_by_id = {package.id: package for package in problem.packages}
+        packed = [ps for ps in state.package_states if ps.placement is not None and ps.package_id in package_by_id]
+        unpacked = [ps for ps in state.package_states if ps.placement is None and ps.package_id in package_by_id]
 
-        for packed_id in state.placed_package_ids:
-            for package in state.package_states:
-                if package.package_id != packed_id:
-                    move_list.append(Swap(packed_id, package.package_id))
-        
-        # nanti tambahin yang langkah 2 sama 3
+        def placements(package_state):
+            return [
+                Placement(truck.id, (x, y, z))
+                for truck in problem.trucks
+                for x in range(truck.dimensions["w"])
+                for y in range(truck.dimensions["l"])
+                for z in range(truck.dimensions["h"])
+            ]
+
+        action_groups: list[list[Move]] = []
+
+        swap_moves = [
+            Swap(a.package_id, b.package_id)
+            for i, a in enumerate(state.package_states)
+            for b in state.package_states[i + 1:]
+        ]
+        if swap_moves:
+            action_groups.append(swap_moves)
+
+        pack_moves = [
+            ChangePlacement(ps.package_id, placement)
+            for ps in unpacked
+            for placement in placements(ps)
+        ]
+        if pack_moves:
+            action_groups.append(pack_moves)
+
+        unpack_moves = [ChangePlacement(ps.package_id, None) for ps in packed]
+        if unpack_moves:
+            action_groups.append(unpack_moves)
+
+        translation_moves = [
+            ChangePlacement(ps.package_id, placement)
+            for ps in packed
+            for placement in placements(ps)
+            if placement != ps.placement
+        ]
+        if translation_moves:
+            action_groups.append(translation_moves)
+
+        rotate_moves = [
+            Rotate(ps.package_id, orientation)
+            for ps in state.package_states
+            if ps.package_id in package_by_id
+            for orientation in package_by_id[ps.package_id].possible_orientations()
+            if orientation != ps.orientation
+        ]
+        if rotate_moves:
+            action_groups.append(rotate_moves)
+
+        return [move for group in action_groups for move in group]
         
 
 class RandomNeighbor(Neighborhood):
+    neighbor_factory: LocalNeighbor
+    def __init__(self):
+        self.neighbor_factory = LocalNeighbor()
+
     def moves(self, problem: Problem, state: State) -> Iterable[Move]:
-        """hanya menghasilkan 1 neighbor random"""
+        """Return one random move from the full local neighborhood."""
+        candidates = self.neighbor_factory.moves(problem, state)
+        if not candidates:
+            return ()
+        return (secrets.choice(candidates),)
+        
