@@ -41,7 +41,6 @@ class Renderer:
 
     def _render_trucks(self):
         gap = 2.0
-        wallThickness = 0.2
         totalWidth = sum(t.dimensions["w"] for t in self.problem.trucks)
         totalWidth += gap * max(len(self.problem.trucks) - 1, 0)
         truckX = -totalWidth / 2
@@ -53,32 +52,12 @@ class Renderer:
             centerX = truckX + width / 2
             self.truckOrigins[t.id] = (truckX, 0.0)
             centerY = truckLength / 2
-            wallCenterZ = truckHeight / 2 + wallThickness
-            self.truckHandles.extend((
-                self.server.scene.add_box(
-                    name=f"{t.id}/base",
-                    position=(centerX, centerY, wallThickness / 2),
-                    dimensions=(width, truckLength, wallThickness),
-                    color=(0, 0, 0),
-                ),
-                self.server.scene.add_box(
-                    name=f"{t.id}/left",
-                    position=(centerX - width / 2, centerY, wallCenterZ),
-                    dimensions=(wallThickness, truckLength, truckHeight),
-                    color=(0, 0, 0),
-                ),
-                self.server.scene.add_box(
-                    name=f"{t.id}/right",
-                    position=(centerX + width / 2, centerY, wallCenterZ),
-                    dimensions=(wallThickness, truckLength, truckHeight),
-                    color=(0, 0, 0),
-                ),
-                self.server.scene.add_box(
-                    name=f"{t.id}/front",
-                    position=(centerX, centerY + truckLength / 2, wallCenterZ),
-                    dimensions=(width, wallThickness, truckHeight),
-                    color=(0, 0, 0),
-                ),
+            self.truckHandles.append(self.server.scene.add_box(
+                name=f"{t.id}",
+                position=(centerX, centerY, truckHeight / 2),
+                dimensions=(width, truckLength, truckHeight),
+                color=(0, 0, 0),
+                opacity=0.1,
             ))
             truckX += width + gap
 
