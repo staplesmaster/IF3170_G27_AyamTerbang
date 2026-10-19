@@ -38,9 +38,7 @@ class SidewaysMoveHillClimbing(LocalSearchAlgorithm):
 
             for move in self.neighborhood.moves(problem, current_state):
                 candidate_state = move.apply(current_state)
-                candidate_value = self.objective.value(
-                    problem, candidate_state
-                )
+                candidate_value = self.objective.value(problem, candidate_state)
 
                 if candidate_value >= best_neighbor_value:
                     best_neighbor_value = candidate_value
