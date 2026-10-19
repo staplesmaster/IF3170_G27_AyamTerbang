@@ -4,6 +4,7 @@ from typing import Literal
 
 from ..models.problem import Problem
 from ..models.solution import State
+from ..models.solution import Result
 
 
 @dataclass(frozen=True)
@@ -23,7 +24,7 @@ class Algorithm(ABC):
         return []
 
     @abstractmethod
-    def solve(self, problem: Problem, state: State, options: dict[str]) -> State:
+    def solve(self, problem: Problem, state: State, options: dict[str]) -> Result:
         raise NotImplementedError
 
     @abstractmethod

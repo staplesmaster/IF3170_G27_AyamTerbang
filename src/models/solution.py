@@ -37,3 +37,14 @@ class State:
             for package_state in self.package_states
             if package_state.placement is not None
         )
+
+@dataclass(frozen=True)
+class Result:
+    initial_state: State                              # State awal
+    final_state: State                                # State akhir
+    objective_value: float = 0.0                      # Nilai objective akhir
+    objective_history: tuple[float, ...] = ()         # Nilai objective tiap iterasi
+    duration: float = 0.0                             # Durasi pencarian (detik)
+    iterations: int = 0                               # Banyak iterasi yang dilakukan
+    restarts: int = 0                                 # Khusus Random Restart: banyak restart
+    iterations_per_restart: tuple[int, ...] = ()      # Khusus Random Restart: iterasi tiap restart

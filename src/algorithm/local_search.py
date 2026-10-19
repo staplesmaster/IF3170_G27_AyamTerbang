@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from ..models.objective import Objective
 from ..models.problem import Problem
 from ..models.solution import State
+from ..models.solution import Result
 from .base import Algorithm
 
 
@@ -34,5 +35,5 @@ class LocalSearchAlgorithm(Algorithm):
         self.neighborhood = neighborhood
 
     @abstractmethod
-    def solve(self, problem: Problem, state: State, options: dict[str]) -> State:
+    def solve(self, problem: Problem, state: State, options: dict[str]) -> Result:
         raise NotImplementedError
