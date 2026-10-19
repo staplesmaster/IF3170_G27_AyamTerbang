@@ -11,7 +11,7 @@ class InitialStateFactory:
 
     def create(self, problem: Problem) -> State:
         state = State.from_problem(problem)
-        iterations = 64 + randbelow(64)
+        iterations = 16 + randbelow(16)
         for _ in range(iterations):
             moves = self.neighbor_picker.moves(problem, state)
             move = next(iter(moves), None)
