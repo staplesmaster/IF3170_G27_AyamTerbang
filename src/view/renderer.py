@@ -95,7 +95,6 @@ class Renderer:
                 position=(origin_x + x + dims[0] / 2, origin_y + y + dims[1] / 2, z + dims[2] / 2),
                 dimensions=dims,
                 color=self._package_color(package),
-                opacity=0.8
             )
             self.packageHandles[package.id] = handle
 
@@ -122,14 +121,12 @@ class Renderer:
             if placement is None:
                 handle.position = (cursor_x + dims[0] / 2, -gap - dims[1] / 2, dims[2] / 2)
                 cursor_x += dims[0] + gap
-                handle.opacity = 1.0
             elif placement.truck_id in self.truckOrigins:
                 x, y, z = placement.position
                 origin_x, origin_y = self.truckOrigins[placement.truck_id]
                 handle.position = (origin_x + x + dims[0] / 2,
                                    origin_y + y + dims[1] / 2,
                                    z + dims[2] / 2)
-                handle.opacity = 0.8
 
     def render(self, problem: Problem, state: State):
         if self.problem != problem:
