@@ -4,6 +4,7 @@ from .renderer import Renderer
 from ..algorithm.base import Algorithm, AlgorithmOption
 from ..models.problem import Problem
 from ..models.solution import State
+from ..algorithm.initial_state_factory import InitialStateFactory
 
 class Control:
 
@@ -18,6 +19,7 @@ class Control:
     uploadButton: viser.GuiUploadButtonHandle
     algorithmDropdown : viser.GuiDropdownHandle
     solveButton: viser.GuiButtonHandle
+    initialStateFactory: InitialStateFactory
 
     def __init__(self, server: viser.ViserServer, parser: Parser, algorithms: list[Algorithm]):
         self.server = server
@@ -27,6 +29,7 @@ class Control:
         self.selected_algorithm = 0
         self.problem = None
         self.option_handles = {}
+        self.initialStateFactory = InitialStateFactory()
 
         self.uploadButton = self.server.gui.add_upload_button("Load config", hint="Upload file konfigurasi (JSON)")
 
@@ -37,7 +40,7 @@ class Control:
             try:
                 problem = self.parser.parse(file)
                 self.problem = problem
-                initial_state = State.from_problem(problem)
+                initial_state = self.initialStateFactory.create(problem)
                 self.renderer.render(problem, initial_state)
                 self.solveButton.disabled = False
             except RuntimeError:
