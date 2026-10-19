@@ -85,3 +85,7 @@ class LocalNeighbor(Neighborhood):
         
         # nanti tambahin yang langkah 2 sama 3
         
+
+class RandomNeighbor(Neighborhood):
+    def moves(self, problem: Problem, state: State) -> Iterable[Move]:
+        """hanya menghasilkan 1 neighbor random"""
