@@ -39,6 +39,7 @@ class Control:
                 self.problem = problem
                 initial_state = State.from_problem(problem)
                 self.renderer.render(problem, initial_state)
+                self.solveButton.disabled = False
             except RuntimeError:
                 # nanti ganti error handlingnya
                 print("error parsing file")
@@ -48,7 +49,10 @@ class Control:
             (algorithm.getName() for algorithm in self.algorithms)
         )
 
-        self.solveButton = server.gui.add_button("Solve")
+        if self.algorithms:
+            self._show_algorithm_options(self.algorithms[0].get_options())
+
+        self.solveButton = server.gui.add_button("Solve", disabled=True)
 
         @self.solveButton.on_click
         def _(_: viser.GuiEvent) -> None:
@@ -59,6 +63,7 @@ class Control:
             options = {key: handle.value for key, handle in self.option_handles.items()}
             state = algorithm.solve(self.problem, options=options)
             self.renderer.render(self.problem, state)
+            self.solveButton.disabled = True
 
         @self.algorithm_dropdown.on_update
         def _(event: viser.GuiEvent) -> None:
@@ -69,8 +74,6 @@ class Control:
                     self._show_algorithm_options(algorithm.get_options())
                     break
 
-        if self.algorithms:
-            self._show_algorithm_options(self.algorithms[0].get_options())
 
     def _show_algorithm_options(self, options: list[AlgorithmOption]) -> None:
         for handle in self.option_handles.values():
