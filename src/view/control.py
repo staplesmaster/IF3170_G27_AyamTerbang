@@ -14,6 +14,7 @@ class Control:
     algorithms: list[Algorithm]
     selected_algorithm: int
     problem: Problem | None
+    state: State | None
     option_handles: dict[str, object]
 
     uploadButton: viser.GuiUploadButtonHandle
@@ -28,6 +29,7 @@ class Control:
         self.renderer = Renderer(server)
         self.selected_algorithm = 0
         self.problem = None
+        self.state = None
         self.option_handles = {}
         self.initialStateFactory = InitialStateFactory()
 
@@ -41,6 +43,7 @@ class Control:
                 problem = self.parser.parse(file)
                 self.problem = problem
                 initial_state = self.initialStateFactory.create(problem)
+                self.state = initial_state
                 self.renderer.render(problem, initial_state)
                 self.solveButton.disabled = False
             except RuntimeError:
@@ -64,7 +67,7 @@ class Control:
 
             algorithm = self.algorithms[self.selected_algorithm]
             options = {key: handle.value for key, handle in self.option_handles.items()}
-            state = algorithm.solve(self.problem, options=options)
+            state = algorithm.solve(self.problem, self.state, options=options)
             self.renderer.render(self.problem, state)
             self.solveButton.disabled = True
 
