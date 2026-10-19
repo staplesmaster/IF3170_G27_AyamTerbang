@@ -1,6 +1,6 @@
 from time import perf_counter
 
-from algorithm.initial_state_factory import InitialStateFactory
+from .initial_state_factory import InitialStateFactory
 from .base import AlgorithmOption
 from ..models.objective import Objective
 from ..models.problem import Problem

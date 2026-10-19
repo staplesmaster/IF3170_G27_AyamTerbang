@@ -72,14 +72,22 @@ class LocalNeighbor(Neighborhood):
 
     def moves(self, problem: Problem, state: State) -> Iterable[Move]:
         """Langkah neighbor (move) yang diperbolehkan tiap iterasi:
-        1. Menukar dua paket, baik di dalam maupun di luar truk
+        1. Menukar dua paket (keduanya di dalam truk, atau satu di dalam dan satu di luar truk)
         2. Memindahkan sebuah paket ke suatu koordinat yang berbeda
-        3. Merotasi paket 90° terhadap sumbu x, y, atau z
+        3. Merotasi paket di dalam truk 90° terhadap sumbu x, y, atau z
         """
 
         package_by_id = {package.id: package for package in problem.packages}
-        packed = [ps for ps in state.package_states if ps.placement is not None and ps.package_id in package_by_id]
-        unpacked = [ps for ps in state.package_states if ps.placement is None and ps.package_id in package_by_id]
+        packed = [
+            ps
+            for ps in state.package_states
+            if ps.placement is not None and ps.package_id in package_by_id
+        ]
+        unpacked = [
+            ps
+            for ps in state.package_states
+            if ps.placement is None and ps.package_id in package_by_id
+        ]
 
         def placements(package_state):
             return [
@@ -95,7 +103,8 @@ class LocalNeighbor(Neighborhood):
         swap_moves = [
             Swap(a.package_id, b.package_id)
             for i, a in enumerate(state.package_states)
-            for b in state.package_states[i + 1:]
+            for b in state.package_states[i + 1 :]
+            if a.placement is not None or b.placement is not None
         ]
         if swap_moves:
             action_groups.append(swap_moves)
@@ -123,9 +132,10 @@ class LocalNeighbor(Neighborhood):
 
         rotate_moves = [
             Rotate(ps.package_id, orientation)
-            for ps in state.package_states
-            if ps.package_id in package_by_id
-            for orientation in package_by_id[ps.package_id].possible_orientations()
+            for ps in packed
+            for orientation in package_by_id[
+                ps.package_id
+            ].possible_orientations()
             if orientation != ps.orientation
         ]
         if rotate_moves:
