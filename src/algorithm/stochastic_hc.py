@@ -34,17 +34,18 @@ class StochasticHC(LocalSearchAlgorithm):
         consecutive_failures = 0
 
         while consecutive_failures < max_random_attempts:
-            candidate_state = self.neighborhood.moves(problem, current_state)
-
-            if candidate_state is None:
-                break
-
-            candidate_value = self.objective.value(
-                problem, candidate_state
+            move = next(
+                iter(self.neighborhood.moves(problem, current_state)), None
             )
 
-            iterations += 1
+            if move is None:
+                break
 
+            candidate_state = move.apply(current_state)
+            candidate_value = self.objective.value(problem, candidate_state)
+
+            iterations += 1
+            
             if candidate_value > current_value:
                 current_state = candidate_state
                 current_value = candidate_value
