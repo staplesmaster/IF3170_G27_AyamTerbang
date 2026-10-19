@@ -8,7 +8,7 @@ from .local_neighbor import LocalNeighbor
 from .local_search import LocalSearchAlgorithm
 
 
-class SidewaysMoveHillClimbing(LocalSearchAlgorithm):
+class SidewaysMoveHC(LocalSearchAlgorithm):
     def __init__(self, objective: Objective) -> None:
         super().__init__(objective, LocalNeighbor())
 

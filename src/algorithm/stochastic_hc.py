@@ -8,7 +8,7 @@ from .local_neighbor import RandomNeighbor
 from .local_search import LocalSearchAlgorithm
 
 
-class StochasticHillClimbing(LocalSearchAlgorithm):
+class StochasticHC(LocalSearchAlgorithm):
     def __init__(self, objective: Objective) -> None:
         super().__init__(objective, RandomNeighbor())
 
