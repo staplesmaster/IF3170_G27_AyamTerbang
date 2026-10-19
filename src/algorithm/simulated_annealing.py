@@ -11,7 +11,7 @@ class SimulatedAnnealing(LocalSearchAlgorithm):
         return [
             AlgorithmOption("initial_temp", "Initial temperature", "number", 100.0, minimum=0.000001),
             AlgorithmOption("threshold", "Temperature threshold", "number", 0.0001, minimum=0.000001),
-            AlgorithmOption("decay", "Cooling rate", "slider", 0.9, minimum=0.01, maximum=0.99, step=0.01),
+            AlgorithmOption("decay", "Cooling rate", "slider", 0.9, minimum=0.8, maximum=0.99, step=0.01),
         ]
 
     def solve(self, problem: Problem, options: dict[str]) -> State:
