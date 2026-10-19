@@ -1,19 +1,27 @@
+import colorsys
 import viser
-from ..models.solution import State
+from ..models.solution import Result, State
 from ..models.problem import Problem
+
 
 class Renderer:
     server: viser.ViserServer
-    problem: Problem
+    problem: Problem | None
     truckOrigins: dict[str, tuple[float, float]]
 
-    truckHandles = list[viser.BoxHandle]
-    packageHandles = dict[str, viser.BoxHandle]
+    truckHandles: list[viser.BoxHandle]
+    packageHandles: dict[str, viser.BoxHandle]
+    packageColors: dict[str, tuple[int, int, int]]
+
+    # Warna kontainer truk dibuat gelap-kontras (slate steel) agar paket berwarna cerah menonjol
+    TRUCK_BASE_COLOR: tuple[int, int, int] = (45, 55, 72)
+    TRUCK_WALL_COLOR: tuple[int, int, int] = (74, 85, 104)
 
     def __init__(self, server: viser.ViserServer):
         self.server = server
         self.truckHandles = []
         self.packageHandles = {}
+        self.packageColors = {}
         self.truckOrigins = {}
         self.problem = None
 
@@ -24,7 +32,29 @@ class Renderer:
         for h in self.packageHandles.values():
             h.remove()
         self.packageHandles.clear()
+        self.packageColors.clear()
         self.truckOrigins.clear()
+
+    def _generate_package_colors(self) -> None:
+        """Bangkitkan warna yang saling kontras untuk setiap package menggunakan
+        distribusi golden-ratio pada ruang warna HSV.
+        """
+        self.packageColors.clear()
+        if self.problem is None:
+            return
+
+        golden_ratio_conjugate = 0.618033988749895
+        for idx, package in enumerate(self.problem.packages):
+            hue = (idx * golden_ratio_conjugate) % 1.0
+            # Variasikan sedikit saturasi dan value agar makin mudah dibedakan
+            saturation = 0.78 if idx % 2 == 0 else 0.90
+            value = 0.95 if idx % 3 != 0 else 0.82
+            r, g, b = colorsys.hsv_to_rgb(hue, saturation, value)
+            self.packageColors[package.id] = (
+                int(round(r * 255)),
+                int(round(g * 255)),
+                int(round(b * 255)),
+            )
 
     def _render_trucks(self):
         gap = 2.0
@@ -46,67 +76,108 @@ class Renderer:
                     name=f"{t.id}/base",
                     position=(centerX, centerY, wallThickness / 2),
                     dimensions=(width, truckLength, wallThickness),
+                    color=self.TRUCK_BASE_COLOR,
                 ),
                 self.server.scene.add_box(
                     name=f"{t.id}/left",
                     position=(centerX - width / 2, centerY, wallCenterZ),
                     dimensions=(wallThickness, truckLength, truckHeight),
+                    color=self.TRUCK_WALL_COLOR,
                 ),
                 self.server.scene.add_box(
                     name=f"{t.id}/right",
                     position=(centerX + width / 2, centerY, wallCenterZ),
                     dimensions=(wallThickness, truckLength, truckHeight),
+                    color=self.TRUCK_WALL_COLOR,
                 ),
                 self.server.scene.add_box(
                     name=f"{t.id}/front",
                     position=(centerX, centerY + truckLength / 2, wallCenterZ),
                     dimensions=(width, wallThickness, truckHeight),
+                    color=self.TRUCK_WALL_COLOR,
                 ),
             ))
             truckX += width + gap
 
     def _render_packages(self, state: State):
-        package_states = {package_state.package_id: package_state for package_state in state.package_states}
+        package_states = {
+            package_state.package_id: package_state
+            for package_state in state.package_states
+        }
 
         gap = 4
-        unpacked = [p for p in self.problem.packages
-                    if package_states.get(p.id) is None or package_states[p.id].placement is None]
-        total_width = sum(p.oriented_dimensions(package_states[p.id].orientation)[0] for p in unpacked)
+        unpacked = [
+            p
+            for p in self.problem.packages
+            if package_states.get(p.id) is None
+            or package_states[p.id].placement is None
+        ]
+        total_width = sum(
+            p.oriented_dimensions(package_states[p.id].orientation)[0]
+            for p in unpacked
+        )
         total_width += gap * max(len(unpacked) - 1, 0)
         cursor_x = -total_width / 2
         for package in unpacked:
-            dims = package.oriented_dimensions(package_states[package.id].orientation)
+            dims = package.oriented_dimensions(
+                package_states[package.id].orientation
+            )
             center = (cursor_x + dims[0] / 2, -gap - dims[1] / 2, dims[2] / 2)
+            color = self.packageColors.get(package.id, (230, 126, 34))
             self.packageHandles[package.id] = self.server.scene.add_box(
-                name=f"packages/{package.id}", position=center, dimensions=dims
+                name=f"packages/{package.id}",
+                position=center,
+                dimensions=dims,
+                color=color,
             )
             cursor_x += dims[0] + gap
 
         for package in self.problem.packages:
             package_state = package_states.get(package.id)
-            placement = package_state.placement if package_state is not None else None
+            placement = (
+                package_state.placement if package_state is not None else None
+            )
             if placement is None:
                 continue
-            truck = next((t for t in self.problem.trucks if t.id == placement.truck_id), None)
+            truck = next(
+                (t for t in self.problem.trucks if t.id == placement.truck_id),
+                None,
+            )
             if truck is None or truck.id not in self.truckOrigins:
                 continue
             dims = package.oriented_dimensions(package_state.orientation)
             origin_x, origin_y = self.truckOrigins[truck.id]
             x, y, z = placement.position
+            color = self.packageColors.get(package.id, (46, 204, 113))
             handle = self.server.scene.add_box(
                 name=f"packages/{package.id}",
-                position=(origin_x + x + dims[0] / 2, origin_y + y + dims[1] / 2, z + dims[2] / 2),
+                position=(
+                    origin_x + x + dims[0] / 2,
+                    origin_y + y + dims[1] / 2,
+                    z + dims[2] / 2,
+                ),
                 dimensions=dims,
+                color=color,
             )
             self.packageHandles[package.id] = handle
 
     def _move_packages(self, state: State):
-        package_states = {package_state.package_id: package_state for package_state in state.package_states}
+        package_states = {
+            package_state.package_id: package_state
+            for package_state in state.package_states
+        }
 
         gap = 4
-        unpacked = [p for p in self.problem.packages
-                    if package_states.get(p.id) is None or package_states[p.id].placement is None]
-        total_width = sum(p.oriented_dimensions(package_states[p.id].orientation)[0] for p in unpacked)
+        unpacked = [
+            p
+            for p in self.problem.packages
+            if package_states.get(p.id) is None
+            or package_states[p.id].placement is None
+        ]
+        total_width = sum(
+            p.oriented_dimensions(package_states[p.id].orientation)[0]
+            for p in unpacked
+        )
         total_width += gap * max(len(unpacked) - 1, 0)
         cursor_x = -total_width / 2
 
@@ -121,19 +192,31 @@ class Renderer:
                 continue
             handle.dimensions = dims
             if placement is None:
-                handle.position = (cursor_x + dims[0] / 2, -gap - dims[1] / 2, dims[2] / 2)
+                handle.position = (
+                    cursor_x + dims[0] / 2,
+                    -gap - dims[1] / 2,
+                    dims[2] / 2,
+                )
                 cursor_x += dims[0] + gap
             elif placement.truck_id in self.truckOrigins:
                 x, y, z = placement.position
                 origin_x, origin_y = self.truckOrigins[placement.truck_id]
-                handle.position = (origin_x + x + dims[0] / 2,
-                                   origin_y + y + dims[1] / 2,
-                                   z + dims[2] / 2)
+                handle.position = (
+                    origin_x + x + dims[0] / 2,
+                    origin_y + y + dims[1] / 2,
+                    z + dims[2] / 2,
+                )
 
-    def render(self, problem: Problem, state: State):
+    def render(self, problem: Problem, state_or_result: State | Result):
+        state = (
+            state_or_result.final_state
+            if isinstance(state_or_result, Result)
+            else state_or_result
+        )
         if self.problem != problem:
             self._cleanup()
             self.problem = problem
+            self._generate_package_colors()
             self._render_trucks()
             self._render_packages(state)
         else:
