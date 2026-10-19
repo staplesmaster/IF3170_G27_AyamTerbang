@@ -1,4 +1,5 @@
 import viser
+import secrets
 from ..models.solution import State
 from ..models.problem import Problem
 
@@ -9,11 +10,13 @@ class Renderer:
 
     truckHandles = list[viser.BoxHandle]
     packageHandles = dict[str, viser.BoxHandle]
+    packageColors: dict[str, tuple[int, int, int]]
 
     def __init__(self, server: viser.ViserServer):
         self.server = server
         self.truckHandles = []
         self.packageHandles = {}
+        self.packageColors = {}
         self.truckOrigins = {}
         self.problem = None
 
@@ -24,11 +27,20 @@ class Renderer:
         for h in self.packageHandles.values():
             h.remove()
         self.packageHandles.clear()
+        self.packageColors.clear()
         self.truckOrigins.clear()
+
+    def _package_color(self, package):
+        color = self.packageColors.get(package.id)
+        if color is None:
+            shade = secrets.randbelow(128) + 128
+            accent = secrets.randbelow(64)
+            color = (shade, accent, accent) if package.is_fragile else (accent, accent, shade)
+            self.packageColors[package.id] = color
+        return color
 
     def _render_trucks(self):
         gap = 2.0
-        wallThickness = 0.2
         totalWidth = sum(t.dimensions["w"] for t in self.problem.trucks)
         totalWidth += gap * max(len(self.problem.trucks) - 1, 0)
         truckX = -totalWidth / 2
@@ -40,28 +52,12 @@ class Renderer:
             centerX = truckX + width / 2
             self.truckOrigins[t.id] = (truckX, 0.0)
             centerY = truckLength / 2
-            wallCenterZ = truckHeight / 2 + wallThickness
-            self.truckHandles.extend((
-                self.server.scene.add_box(
-                    name=f"{t.id}/base",
-                    position=(centerX, centerY, wallThickness / 2),
-                    dimensions=(width, truckLength, wallThickness),
-                ),
-                self.server.scene.add_box(
-                    name=f"{t.id}/left",
-                    position=(centerX - width / 2, centerY, wallCenterZ),
-                    dimensions=(wallThickness, truckLength, truckHeight),
-                ),
-                self.server.scene.add_box(
-                    name=f"{t.id}/right",
-                    position=(centerX + width / 2, centerY, wallCenterZ),
-                    dimensions=(wallThickness, truckLength, truckHeight),
-                ),
-                self.server.scene.add_box(
-                    name=f"{t.id}/front",
-                    position=(centerX, centerY + truckLength / 2, wallCenterZ),
-                    dimensions=(width, wallThickness, truckHeight),
-                ),
+            self.truckHandles.append(self.server.scene.add_box(
+                name=f"{t.id}",
+                position=(centerX, centerY, truckHeight / 2),
+                dimensions=(width, truckLength, truckHeight),
+                color=(0, 0, 0),
+                opacity=0.1,
             ))
             truckX += width + gap
 
@@ -78,7 +74,8 @@ class Renderer:
             dims = package.oriented_dimensions(package_states[package.id].orientation)
             center = (cursor_x + dims[0] / 2, -gap - dims[1] / 2, dims[2] / 2)
             self.packageHandles[package.id] = self.server.scene.add_box(
-                name=f"packages/{package.id}", position=center, dimensions=dims
+                name=f"packages/{package.id}", position=center, dimensions=dims,
+                color=self._package_color(package),
             )
             cursor_x += dims[0] + gap
 
@@ -97,6 +94,8 @@ class Renderer:
                 name=f"packages/{package.id}",
                 position=(origin_x + x + dims[0] / 2, origin_y + y + dims[1] / 2, z + dims[2] / 2),
                 dimensions=dims,
+                color=self._package_color(package),
+                opacity=0.8
             )
             self.packageHandles[package.id] = handle
 
@@ -123,12 +122,14 @@ class Renderer:
             if placement is None:
                 handle.position = (cursor_x + dims[0] / 2, -gap - dims[1] / 2, dims[2] / 2)
                 cursor_x += dims[0] + gap
+                handle.opacity = 1.0
             elif placement.truck_id in self.truckOrigins:
                 x, y, z = placement.position
                 origin_x, origin_y = self.truckOrigins[placement.truck_id]
                 handle.position = (origin_x + x + dims[0] / 2,
                                    origin_y + y + dims[1] / 2,
                                    z + dims[2] / 2)
+                handle.opacity = 0.8
 
     def render(self, problem: Problem, state: State):
         if self.problem != problem:
