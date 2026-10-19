@@ -48,3 +48,5 @@ class Result:
     iterations: int = 0                               # Banyak iterasi yang dilakukan
     restarts: int = 0                                 # Khusus Random Restart: banyak restart
     iterations_per_restart: tuple[int, ...] = ()      # Khusus Random Restart: iterasi tiap restart
+    random_walk_history: tuple[float, ...] = ()       # Khusus Simulated Unnealing: Nilai randomwalk tiap iterasi tiap iterasi
+    stuck_frequency: int = 0                          # Khusus Simulated Unnealing: Frekuensi stuck di local optima
