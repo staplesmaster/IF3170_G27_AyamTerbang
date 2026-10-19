@@ -19,7 +19,7 @@ def main() -> None:
     server = viser.ViserServer()
     parser = Parser()
     objective = SimpleObjective()
-    algorithms = [SimulatedAnnealing(objective, RandomNeighbor())]
+    algorithms = [SimulatedAnnealing(objective)]
 
     control = Control(server, parser, algorithms)
 
