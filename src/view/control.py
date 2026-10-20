@@ -4,6 +4,7 @@ import viser
 from ..repository.parser import Parser
 from .renderer import Renderer
 from ..algorithm.base import Algorithm, AlgorithmOption
+from ..models.objective import Objective
 from ..models.problem import Problem
 from ..models.solution import Result, State
 from ..algorithm.initial_state_factory import InitialStateFactory
@@ -15,7 +16,9 @@ class Control:
     parser: Parser
     renderer: Renderer
     algorithms: list[Algorithm]
+    objectives: list[Objective]
     selected_algorithm: int
+    selected_objective: int
     problem: Problem | None
     state: State | None
     result: Result | None
@@ -35,12 +38,15 @@ class Control:
         server: viser.ViserServer,
         parser: Parser,
         algorithms: list[Algorithm],
+        objectives: list[Objective] | None = None,
     ):
         self.server = server
         self.parser = parser
         self.algorithms = algorithms
+        self.objectives = objectives or []
         self.renderer = Renderer(server)
         self.selected_algorithm = 0
+        self.selected_objective = 0
         self.problem = None
         self.state = None
         self.result = None
@@ -88,6 +94,26 @@ class Control:
             tuple(algorithm.getName() for algorithm in self.algorithms),
         )
 
+        self.objective_names = tuple(
+            getattr(obj, "getName", lambda: type(obj).__name__)()
+            for obj in self.objectives
+        )
+        if self.objectives:
+            self.objective_dropdown = server.gui.add_dropdown(
+                "Objective Function",
+                self.objective_names,
+            )
+
+            @self.objective_dropdown.on_update
+            def _(event: viser.GuiEvent) -> None:
+                selected_obj_name = event.target.value
+                for i, name in enumerate(self.objective_names):
+                    if name == selected_obj_name:
+                        self.selected_objective = i
+                        for algo in self.algorithms:
+                            algo.objective = self.objectives[i]
+                        break
+
         if self.algorithms:
             self._show_algorithm_options(self.algorithms[0].get_options())
 
@@ -99,6 +125,8 @@ class Control:
                 return
 
             algorithm = self.algorithms[self.selected_algorithm]
+            if self.objectives:
+                algorithm.objective = self.objectives[self.selected_objective]
             options = {
                 key: handle.value for key, handle in self.option_handles.items()
             }
@@ -189,9 +217,14 @@ class Control:
         total_pkgs = len(self.problem.packages) if self.problem else 0
         init_placed = len(result.initial_state.placed_package_ids)
         final_placed = len(result.final_state.placed_package_ids)
-
+        obj_name = (
+            self.objective_names[self.selected_objective]
+            if self.objectives
+            else "-"
+        )
         lines = [
             f"**Algoritma:** {algorithm_name}",
+            f"- **Objective Function:** {obj_name}",
             f"- **Objective Awal:** `{initial_obj:.2f}`",
             f"- **Objective Akhir:** `{result.objective_value:.2f}`",
             f"- **Durasi Pencarian:** `{result.duration:.4f} s`",
@@ -199,7 +232,6 @@ class Control:
             f"- **Paket Terangkut (Awal → Akhir):** `{init_placed}/{total_pkgs}` → `{final_placed}/{total_pkgs}`",
         ]
 
-        # Informasi tambahan spesifik Random Restart HC
         if result.iterations_per_restart:
             lines.append(f"- **Banyak Restart:** `{result.restarts}`")
             per_restart_str = ", ".join(
@@ -208,7 +240,6 @@ class Control:
             )
             lines.append(f"- **Iterasi per Sesi/Restart:** `{per_restart_str}`")
 
-        # Informasi tambahan spesifik Simulated Annealing
         if result.random_walk_history or "Simulated Annealing" in algorithm_name:
             lines.append(
                 f"- **Frekuensi Stuck:** `{result.stuck_frequency}`"
@@ -236,7 +267,7 @@ class Control:
                 color="#2563eb",
             )
             self.server.gui.add_image(
-                obj_img, label="Plot Objective Function vs Iterasi"
+                obj_img, label="Plot Objective Function terhadap Iterasi"
             )
 
             if result.random_walk_history:
@@ -249,8 +280,20 @@ class Control:
                     ylim=(0.0, 1.05),
                 )
                 self.server.gui.add_image(
-                    rw_img, label="Plot e^(deltaE / T) vs Iterasi"
+                    rw_img, label="Plot e^(deltaE / T) terhadap Iterasi"
                 )
+
+            if result.mean_objective_history:
+             mean_img = self._create_line_plot_image(
+                 values=result.mean_objective_history,
+                 title="Rata-rata Objective Populasi terhadap Iterasi",
+                 xlabel="Iterasi (Generasi)",
+                 ylabel="Mean Objective Value",
+                 color="#16a34a",
+             )
+             self.server.gui.add_image(
+                 mean_img, label="Plot Mean Objective Function terhadap Iterasi"
+             )
 
     def _create_line_plot_image(
         self,

@@ -24,7 +24,7 @@ def main() -> None:
 
     server = viser.ViserServer()
     parser = Parser()
-    objective = ObjectiveMain()
+    objective = [ObjectiveMain(), ObjectiveAlt()]
     algorithms = [SteepestAscentHC(objective),
                   SidewaysMoveHC(objective),
                   RandomRestartHC(objective),
@@ -32,7 +32,7 @@ def main() -> None:
                   SimulatedAnnealing(objective),
                   GeneticAlgorithm(objective)]
 
-    control = Control(server, parser, algorithms)
+    control = Control(server, parser, algorithms, objective)
 
     print("Server running")
     while True:
