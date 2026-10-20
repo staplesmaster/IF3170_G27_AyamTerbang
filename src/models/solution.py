@@ -46,7 +46,8 @@ class Result:
     objective_history: tuple[float, ...] = ()         # Nilai objective tiap iterasi
     duration: float = 0.0                             # Durasi pencarian (detik)
     iterations: int = 0                               # Banyak iterasi yang dilakukan
-    restarts: int = 0                                 # Khusus Random Restart: banyak restart
-    iterations_per_restart: tuple[int, ...] = ()      # Khusus Random Restart: iterasi tiap restart
+    restarts: int = 0                                 # Khusus Random Restart: Banyak restart
+    iterations_per_restart: tuple[int, ...] = ()      # Khusus Random Restart: Iterasi tiap restart
     random_walk_history: tuple[float, ...] = ()       # Khusus Simulated Unnealing: Nilai randomwalk tiap iterasi tiap iterasi
     stuck_frequency: int = 0                          # Khusus Simulated Unnealing: Frekuensi stuck
+    mean_objective_history: tuple[float, ...] = ()    # Khusus Genetic Algorithm: Rata-rata objective dari seluruh iterasi 
