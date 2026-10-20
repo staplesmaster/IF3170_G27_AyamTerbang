@@ -1,18 +1,14 @@
-from time import perf_counter
-
+import io
 import numpy as np
 import viser
-from matplotlib.backends.backend_agg import FigureCanvasAgg
-from matplotlib.figure import Figure
-from matplotlib.ticker import MaxNLocator
-
 from ..repository.parser import Parser
 from .renderer import Renderer
 from ..algorithm.base import Algorithm, AlgorithmOption
-from ..algorithm.genetic_algorithm import GeneticAlgorithm
+from ..models.objective import Objective
 from ..models.problem import Problem
-from ..models.solution import State
+from ..models.solution import Result, State
 from ..algorithm.initial_state_factory import InitialStateFactory
+
 
 class Control:
 
@@ -20,140 +16,148 @@ class Control:
     parser: Parser
     renderer: Renderer
     algorithms: list[Algorithm]
+    objectives: list[Objective]
     selected_algorithm: int
+    selected_objective: int
     problem: Problem | None
     state: State | None
-    initial_state: State | None
+    result: Result | None
     option_handles: dict[str, object]
 
     uploadButton: viser.GuiUploadButtonHandle
-    algorithm_dropdown: viser.GuiDropdownHandle
+    algorithmDropdown: viser.GuiDropdownHandle
     solveButton: viser.GuiButtonHandle
+    statusMarkdown: viser.GuiMarkdownHandle
+    stateViewDropdown: viser.GuiDropdownHandle | None
+    statsFolder: viser.GuiFolderHandle | None
+    plotsFolder: viser.GuiFolderHandle | None
     initialStateFactory: InitialStateFactory
 
-    def __init__(self, server: viser.ViserServer, parser: Parser, algorithms: list[Algorithm]):
+    def __init__(
+        self,
+        server: viser.ViserServer,
+        parser: Parser,
+        algorithms: list[Algorithm],
+        objectives: list[Objective] | None = None,
+    ):
         self.server = server
         self.parser = parser
         self.algorithms = algorithms
+        self.objectives = objectives or []
         self.renderer = Renderer(server)
         self.selected_algorithm = 0
+        self.selected_objective = 0
         self.problem = None
         self.state = None
-        self.initial_state = None
-        self.config_name = ""
-        self.experiments = []
-        self.running = False
+        self.result = None
         self.option_handles = {}
+        self.stateViewDropdown = None
+        self.statsFolder = None
+        self.plotsFolder = None
         self.initialStateFactory = InitialStateFactory()
 
-        self.uploadButton = self.server.gui.add_upload_button("Load config", hint="Upload file konfigurasi (JSON)")
-        self.config_text = self.server.gui.add_markdown("Belum ada konfigurasi yang dimuat.")
+        self.uploadButton = self.server.gui.add_upload_button(
+            "Load config", hint="Upload file konfigurasi (JSON)"
+        )
+
+        self.statusMarkdown = self.server.gui.add_markdown(
+            "ℹ️ **Status:** Silakan unggah file konfigurasi JSON."
+        )
+
+        @self.uploadButton.on_upload
+        def _(event: viser.GuiEvent) -> None:
+            file = event.target.value
+            try:
+                self.statusMarkdown.content = (
+                    "⏳ **Status:** Memuat konfigurasi dan membuat Initial State..."
+                )
+                problem = self.parser.parse(file)
+                self.problem = problem
+                initial_state = self.initialStateFactory.create(problem)
+                self.state = initial_state
+                self.result = None
+                self._clear_result_cards()
+                self.renderer.render(problem, initial_state)
+                self.solveButton.disabled = False
+                self.statusMarkdown.content = (
+                    f"✅ **Status:** Konfigurasi dimuat ({len(problem.packages)} paket, "
+                    f"{len(problem.trucks)} truk). Siap menjalankan **Solve**."
+                )
+            except RuntimeError:
+                self.statusMarkdown.content = (
+                    "❌ **Status:** Gagal membaca file konfigurasi JSON."
+                )
+                print("error parsing file")
+
         self.algorithm_dropdown = server.gui.add_dropdown(
             "Algoritma Local Search",
-            tuple(algorithm.getName() for algorithm in self.algorithms)
+            tuple(algorithm.getName() for algorithm in self.algorithms),
         )
-        self.options_folder = self.server.gui.add_folder("Parameter algoritma")
+
+        self.objective_names = tuple(
+            getattr(obj, "getName", lambda: type(obj).__name__)()
+            for obj in self.objectives
+        )
+        if self.objectives:
+            self.objective_dropdown = server.gui.add_dropdown(
+                "Objective Function",
+                self.objective_names,
+            )
+
+            @self.objective_dropdown.on_update
+            def _(event: viser.GuiEvent) -> None:
+                selected_obj_name = event.target.value
+                for i, name in enumerate(self.objective_names):
+                    if name == selected_obj_name:
+                        self.selected_objective = i
+                        for algo in self.algorithms:
+                            algo.objective = self.objectives[i]
+                        break
+
         if self.algorithms:
             self._show_algorithm_options(self.algorithms[0].get_options())
 
         self.solveButton = server.gui.add_button("Solve", disabled=True)
-        self.status_text = server.gui.add_markdown("", visible=False)
-
-        with server.gui.add_folder("Hasil percobaan"):
-            self.experiment_dropdown = server.gui.add_dropdown(
-                "Percobaan", ("Konfigurasi aktif",), disabled=True
-            )
-            self.state_dropdown = server.gui.add_dropdown(
-                "Tampilan state", ("State awal", "State akhir"), disabled=True
-            )
-            self.result_text = server.gui.add_markdown("Jalankan pencarian untuk melihat hasil.")
-            self.state_text = server.gui.add_markdown("")
-            self.history_image = server.gui.add_image(
-                np.zeros((1, 1, 3), dtype=np.uint8),
-                label="Objective per generasi", format="png", visible=False
-            )
-
-        with server.gui.add_folder("Rekap percobaan"):
-            self.experiment_table = server.gui.add_markdown("Belum ada percobaan.")
-            server.gui.add_markdown("Rekap disimpan selama aplikasi berjalan.")
-
-        @self.uploadButton.on_upload
-        def _(event: viser.GuiEvent) -> None:
-            if self.running:
-                return
-            file = event.target.value
-            try:
-                problem = self.parser.parse(file)
-                initial_state = self.initialStateFactory.create(problem)
-            except (RuntimeError, ValueError, KeyError, TypeError):
-                self.status_text.content = "Konfigurasi gagal dimuat. Periksa isi file JSON."
-                self.status_text.visible = True
-                return
-
-            self.problem = problem
-            self.initial_state = initial_state
-            self.state = initial_state
-            self.config_name = file.name
-            self.config_text.content = (
-                f"**Konfigurasi aktif:** {self.config_name}\n\n"
-                f"Paket: {len(problem.packages)} · Truk: {len(problem.trucks)}\n\n"
-                "Solve memakai konfigurasi ini dan state awal yang sama pada setiap percobaan."
-            )
-            self.experiment_dropdown.value = "Konfigurasi aktif"
-            self._show_experiment()
-            self.status_text.visible = False
-            self.solveButton.disabled = not self.algorithms
 
         @self.solveButton.on_click
         def _(_: viser.GuiEvent) -> None:
-            if self.running or self.problem is None or self.initial_state is None or not self.algorithms:
+            if self.problem is None or self.state is None or not self.algorithms:
                 return
 
             algorithm = self.algorithms[self.selected_algorithm]
-            options = {key: handle.value for key, handle in self.option_handles.items()}
-            self._set_running(True)
-            self.status_text.content = "Pencarian sedang berjalan..."
-            self.status_text.visible = True
-            try:
-                started = perf_counter()
-                final_state = algorithm.solve(self.problem, self.initial_state, options=options)
-                duration = perf_counter() - started
-                initial_state = self.initial_state
-                result = None
+            if self.objectives:
+                algorithm.objective = self.objectives[self.selected_objective]
+            options = {
+                key: handle.value for key, handle in self.option_handles.items()
+            }
 
-                if isinstance(algorithm, GeneticAlgorithm):
-                    result = algorithm.last_result
-                    initial_state = result.initial_state
-                    duration = result.duration
-                    objective = result.objective_value
-                else:
-                    objective = algorithm.objective.value(self.problem, final_state)
+            # Tampilkan status loading selama algoritma bekerja
+            self.solveButton.disabled = True
+            self.statusMarkdown.content = (
+                f"⏳ **Status:** Sedang menjalankan **{algorithm.getName()}**... "
+                "Mohon tunggu."
+            )
 
-                self.state = final_state
-                self.experiments.append({
-                    "problem": self.problem,
-                    "config": self.config_name,
-                    "algorithm": algorithm.getName(),
-                    "options": options,
-                    "initial_state": initial_state,
-                    "final_state": final_state,
-                    "initial_objective": algorithm.objective.value(self.problem, initial_state),
-                    "objective": objective,
-                    "duration": duration,
-                    "result": result,
-                })
-                choices = ["Konfigurasi aktif"]
-                for index in range(len(self.experiments)):
-                    choices.append(f"Percobaan {index + 1}")
-                self.experiment_dropdown.options = tuple(choices)
-                self._update_experiment_table()
-             
-                self.experiment_dropdown.value = choices[-1]
-                self.status_text.content = "Pencarian selesai. Ubah parameter untuk percobaan berikutnya."
-            except (ValueError, RuntimeError) as error:
-                self.status_text.content = f"Pencarian gagal: {error}"
-            finally:
-                self._set_running(False)
+            output = algorithm.solve(self.problem, self.state, options=options)
+
+            if isinstance(output, Result):
+                self.result = output
+            else:
+                self.result = Result(
+                    initial_state=self.state,
+                    final_state=output,
+                )
+
+            self.renderer.render(self.problem, self.result)
+            self._show_state_view_selector()
+            self._show_stats_card(algorithm.getName(), self.result)
+            self._show_plots_card(algorithm.getName(), self.result)
+
+            self.statusMarkdown.content = (
+                f"✅ **Status:** Pencarian **{algorithm.getName()}** selesai "
+                f"dalam `{self.result.duration:.4f}` detik."
+            )
+            self.solveButton.disabled = False
 
         @self.algorithm_dropdown.on_update
         def _(event: viser.GuiEvent) -> None:
@@ -162,163 +166,261 @@ class Control:
                 if algorithm.getName() == selected_name:
                     self.selected_algorithm = i
                     self._show_algorithm_options(algorithm.get_options())
+                    if self.problem is not None and self.state is not None:
+                        self.solveButton.disabled = False
                     break
 
-        @self.experiment_dropdown.on_update
-        def _(_: viser.GuiEvent) -> None:
-            self._show_experiment()
+    def _clear_result_cards(self) -> None:
+        if self.stateViewDropdown is not None:
+            self.stateViewDropdown.remove()
+            self.stateViewDropdown = None
+        if self.statsFolder is not None:
+            self.statsFolder.remove()
+            self.statsFolder = None
+        if self.plotsFolder is not None:
+            self.plotsFolder.remove()
+            self.plotsFolder = None
 
-        @self.state_dropdown.on_update
-        def _(_: viser.GuiEvent) -> None:
-            self._render_selected_state()
+    def _show_state_view_selector(self) -> None:
+        if self.stateViewDropdown is not None:
+            self.stateViewDropdown.remove()
+            self.stateViewDropdown = None
 
-    def _set_running(self, running: bool) -> None:
-        self.running = running
-        self.solveButton.disabled = running or self.problem is None or not self.algorithms
-        self.uploadButton.disabled = running
-        self.algorithm_dropdown.disabled = running
-        for handle in self.option_handles.values():
-            handle.disabled = running
-        self.experiment_dropdown.disabled = running or not self.experiments
-        self.state_dropdown.disabled = running or self.experiment_dropdown.value == "Konfigurasi aktif"
-
-    def _show_experiment(self) -> None:
-        if self.experiment_dropdown.value == "Konfigurasi aktif":
-            self.state_dropdown.value = "State awal"
-            self.state_dropdown.disabled = True
-            self.result_text.content = "Jalankan pencarian untuk melihat hasil konfigurasi aktif."
-            self.history_image.visible = False
-            self._render_selected_state()
+        if self.result is None:
             return
 
-        index = self.experiment_dropdown.options.index(self.experiment_dropdown.value) - 1
-        experiment = self.experiments[index]
-        result = experiment["result"]
-        population = "—"
-        iterations = "Belum dicatat"
-        if result is not None:
-            population = int(experiment["options"]["population_size"])
-            iterations = result.iterations
-
-        self.result_text.content = (
-            f"**Percobaan {index + 1}: {experiment['algorithm']}**\n\n"
-            f"Konfigurasi: {experiment['config']}\n\n"
-            "| Pengukuran | Hasil |\n|---|---:|\n"
-            f"| Objective awal | {experiment['initial_objective']:.2f} |\n"
-            f"| Objective akhir | {experiment['objective']:.2f} |\n"
-            f"| Jumlah populasi | {population} |\n"
-            f"| Banyak iterasi | {iterations} |\n"
-            f"| Durasi pencarian | {experiment['duration']:.4f} detik |"
+        self.stateViewDropdown = self.server.gui.add_dropdown(
+            "Tampilan State",
+            ("Final State", "Initial State"),
+            initial_value="Final State",
         )
-        if result is not None:
-            self.result_text.content += (
-                f"\n| Crossover rate | {experiment['options']['crossover_rate']:.2f} |"
-                f"\n| Mutation rate | {experiment['options']['mutation_rate']:.2f} |"
-            )
-            self._show_history(result.objective_history, result.mean_objective_history)
-        else:
-            self.result_text.content += "\n\nRiwayat pencarian belum tersedia untuk algoritma ini."
-            self.history_image.visible = False
 
-        self.state_dropdown.disabled = False
-        self.state_dropdown.value = "State akhir"
-        self._render_selected_state()
-
-    def _render_selected_state(self) -> None:
-        if self.experiment_dropdown.value == "Konfigurasi aktif":
-            problem = self.problem
-            state = self.initial_state
-        else:
-            index = self.experiment_dropdown.options.index(self.experiment_dropdown.value) - 1
-            experiment = self.experiments[index]
-            problem = experiment["problem"]
-            if self.state_dropdown.value == "State awal":
-                state = experiment["initial_state"]
+        @self.stateViewDropdown.on_update
+        def _(event: viser.GuiEvent) -> None:
+            if self.problem is None or self.result is None:
+                return
+            if event.target.value == "Initial State":
+                self.renderer.render(self.problem, self.result.initial_state)
             else:
-                state = experiment["final_state"]
+                self.renderer.render(self.problem, self.result.final_state)
 
-        if problem is None or state is None:
-            return
-        self.renderer.render(problem, state)
-        self.state_text.content = (
-            f"**{self.state_dropdown.value}** · Paket dimuat: "
-            f"{len(state.placed_package_ids)} / {len(problem.packages)}"
+    def _show_stats_card(self, algorithm_name: str, result: Result) -> None:
+        if self.statsFolder is not None:
+            self.statsFolder.remove()
+            self.statsFolder = None
+
+        initial_obj = (
+            result.objective_history[0]
+            if result.objective_history
+            else 0.0
         )
-
-    def _show_history(self, objective_history, mean_objective_history) -> None:
-        generations = range(len(objective_history))
-
-        figure = Figure(figsize=(5, 3), dpi=140)
-        axis = figure.subplots()
-        axis.plot(generations, objective_history, color="#386641", label="Maksimum", linewidth=2)
-        axis.plot(generations, mean_objective_history, color="#386641", label="Rata-rata", linestyle="--")
-        axis.set_xlabel("Generasi")
-        axis.set_ylabel("Objective function")
-        axis.xaxis.set_major_locator(MaxNLocator(integer=True))
-        axis.grid(alpha=0.25)
-        axis.legend()
-        figure.tight_layout()
-
-        canvas = FigureCanvasAgg(figure)
-        canvas.draw()
-        self.history_image.image = np.asarray(canvas.buffer_rgba()).copy()
-        self.history_image.visible = True
-
-    def _update_experiment_table(self) -> None:
-        rows = [
-            "| Run | Konfigurasi | Algoritma | Populasi | Iterasi | Cross. | Mut. | Objective | Detik |",
-            "|---|---|---|---:|---:|---:|---:|---:|---:|",
+        total_pkgs = len(self.problem.packages) if self.problem else 0
+        init_placed = len(result.initial_state.placed_package_ids)
+        final_placed = len(result.final_state.placed_package_ids)
+        obj_name = (
+            self.objective_names[self.selected_objective]
+            if self.objectives
+            else "-"
+        )
+        lines = [
+            f"**Algoritma:** {algorithm_name}",
+            f"- **Objective Function:** {obj_name}",
+            f"- **Objective Awal:** `{initial_obj:.2f}`",
+            f"- **Objective Akhir:** `{result.objective_value:.2f}`",
+            f"- **Durasi Pencarian:** `{result.duration:.4f} s`",
+            f"- **Total Iterasi:** `{result.iterations}`",
+            f"- **Paket Terangkut (Awal → Akhir):** `{init_placed}/{total_pkgs}` → `{final_placed}/{total_pkgs}`",
         ]
-        for index, experiment in enumerate(self.experiments):
-            result = experiment["result"]
-            population = "—"
-            iterations = "—"
-            crossover = "—"
-            mutation = "—"
-            if result is not None:
-                population = int(experiment["options"]["population_size"])
-                iterations = result.iterations
-                crossover = f"{experiment['options']['crossover_rate']:.2f}"
-                mutation = f"{experiment['options']['mutation_rate']:.2f}"
-            config = experiment["config"].replace("|", "\\|").replace("\n", " ")
-            rows.append(
-                f"| {index + 1} | {config} | {experiment['algorithm']} | {population} | "
-                f"{iterations} | {crossover} | {mutation} | {experiment['objective']:.2f} | "
-                f"{experiment['duration']:.4f} |"
+
+        if result.iterations_per_restart:
+            lines.append(f"- **Banyak Restart:** `{result.restarts}`")
+            per_restart_str = ", ".join(
+                f"R{idx}: {it}"
+                for idx, it in enumerate(result.iterations_per_restart)
             )
-        self.experiment_table.content = "\n".join(rows)
+            lines.append(f"- **Iterasi per Sesi/Restart:** `{per_restart_str}`")
+
+        if result.random_walk_history or "Simulated Annealing" in algorithm_name:
+            lines.append(
+                f"- **Frekuensi Stuck:** `{result.stuck_frequency}`"
+            )
+
+        self.statsFolder = self.server.gui.add_folder("Statistik Hasil Pencarian")
+        with self.statsFolder:
+            self.server.gui.add_markdown("\n".join(lines))
+
+    def _show_plots_card(self, algorithm_name: str, result: Result) -> None:
+        if self.plotsFolder is not None:
+            self.plotsFolder.remove()
+            self.plotsFolder = None
+
+        if not result.objective_history:
+            return
+
+        self.plotsFolder = self.server.gui.add_folder("Diagram Plot Iterasi")
+        with self.plotsFolder:
+            obj_img = self._create_line_plot_image(
+                values=result.objective_history,
+                title="Objective Value terhadap Iterasi",
+                xlabel="Iterasi",
+                ylabel="Objective Value",
+                color="#2563eb",
+            )
+            self.server.gui.add_image(
+                obj_img, label="Plot Objective Function terhadap Iterasi"
+            )
+
+            if result.random_walk_history:
+                rw_img = self._create_line_plot_image(
+                    values=result.random_walk_history,
+                    title="Probabilitas e^(deltaE / T) terhadap Iterasi",
+                    xlabel="Iterasi",
+                    ylabel="e^(deltaE / T)",
+                    color="#d97706",
+                    ylim=(0.0, 1.05),
+                )
+                self.server.gui.add_image(
+                    rw_img, label="Plot e^(deltaE / T) terhadap Iterasi"
+                )
+
+            if result.mean_objective_history:
+             mean_img = self._create_line_plot_image(
+                 values=result.mean_objective_history,
+                 title="Rata-rata Objective Populasi terhadap Iterasi",
+                 xlabel="Iterasi (Generasi)",
+                 ylabel="Mean Objective Value",
+                 color="#16a34a",
+             )
+             self.server.gui.add_image(
+                 mean_img, label="Plot Mean Objective Function terhadap Iterasi"
+             )
+
+    def _create_line_plot_image(
+        self,
+        values: tuple[float, ...],
+        title: str,
+        xlabel: str,
+        ylabel: str,
+        color: str = "#2563eb",
+        ylim: tuple[float, float] | None = None,
+    ) -> np.ndarray:
+        """Render grafik garis ke array gambar RGB uint8 untuk ditampilkan di Viser."""
+        try:
+            import matplotlib
+
+            matplotlib.use("Agg")
+            import matplotlib.pyplot as plt
+            from matplotlib.ticker import MaxNLocator
+            from PIL import Image
+
+            fig, ax = plt.subplots(figsize=(5.0, 3.2), dpi=120)
+            fig.patch.set_facecolor("#ffffff")
+            ax.set_facecolor("#f8fafc")
+
+            x_vals = list(range(len(values)))
+            ax.plot(
+                x_vals,
+                values,
+                color=color,
+                linewidth=1.8,
+                marker="o" if len(values) <= 25 else None,
+                markersize=3.5,
+            )
+            ax.set_title(title, fontsize=10, fontweight="bold", pad=8)
+            ax.set_xlabel(xlabel, fontsize=8.5)
+            ax.set_ylabel(ylabel, fontsize=8.5)
+            ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+            if ylim is not None:
+                ax.set_ylim(*ylim)
+            ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.6)
+            ax.tick_params(labelsize=8)
+            fig.tight_layout()
+
+            buf = io.BytesIO()
+            fig.savefig(buf, format="png")
+            plt.close(fig)
+            buf.seek(0)
+            img = Image.open(buf).convert("RGB")
+            return np.asarray(img, dtype=np.uint8)
+        except Exception:
+            # Fallback kanvas numpy murni jika matplotlib belum ter-install
+            w, h = 480, 280
+            canvas = np.full((h, w, 3), 248, dtype=np.uint8)
+            pad_l, pad_r, pad_t, pad_b = 40, 20, 25, 30
+            plot_w = w - pad_l - pad_r
+            plot_h = h - pad_t - pad_b
+
+            canvas[pad_t : h - pad_b, pad_l] = (100, 116, 139)
+            canvas[h - pad_b, pad_l : w - pad_r] = (100, 116, 139)
+
+            if len(values) == 1:
+                y = pad_t + plot_h // 2
+                canvas[y - 2 : y + 3, pad_l + plot_w // 2 - 2 : pad_l + plot_w // 2 + 3] = (
+                    37,
+                    99,
+                    235,
+                )
+                return canvas
+
+            v_min = ylim[0] if ylim else min(values)
+            v_max = ylim[1] if ylim else max(values)
+            if abs(v_max - v_min) < 1e-9:
+                v_max = v_min + 1.0
+
+            pts = []
+            n = len(values)
+            for i, val in enumerate(values):
+                px = pad_l + int(round((i / (n - 1)) * (plot_w - 1)))
+                norm_y = (val - v_min) / (v_max - v_min)
+                norm_y = max(0.0, min(1.0, norm_y))
+                py = (h - pad_b - 1) - int(round(norm_y * (plot_h - 1)))
+                pts.append((px, py))
+
+            for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+                steps = max(abs(x1 - x0), abs(y1 - y0), 1)
+                for s in range(steps + 1):
+                    x = int(round(x0 + (x1 - x0) * s / steps))
+                    y = int(round(y0 + (y1 - y0) * s / steps))
+                    if 0 <= y < h and 0 <= x < w:
+                        canvas[max(0, y - 1) : min(h, y + 2), max(0, x - 1) : min(w, x + 2)] = (
+                            37,
+                            99,
+                            235,
+                        )
+            return canvas
 
     def _show_algorithm_options(self, options: list[AlgorithmOption]) -> None:
         for handle in self.option_handles.values():
             handle.remove()
         self.option_handles.clear()
 
-        with self.options_folder:
-            for option in options:
-                if option.kind == "number":
-                    handle = self.server.gui.add_number(
-                        option.label,
-                        initial_value=option.default,
-                        min=option.minimum,
-                        max=option.maximum,
-                        step=option.step or 0.1,
+        for option in options:
+            if option.kind == "number":
+                handle = self.server.gui.add_number(
+                    option.label,
+                    initial_value=option.default,
+                    min=option.minimum,
+                    max=option.maximum,
+                    step=option.step or 0.1,
+                )
+            elif option.kind == "slider":
+                if option.minimum is None or option.maximum is None:
+                    raise ValueError(
+                        f"Slider option '{option.key}' requires minimum and maximum"
                     )
-                elif option.kind == "slider":
-                    if option.minimum is None or option.maximum is None:
-                        raise ValueError(f"Slider option '{option.key}' requires minimum and maximum")
-                    handle = self.server.gui.add_slider(
-                        option.label,
-                        min=option.minimum,
-                        max=option.maximum,
-                        step=option.step or 0.1,
-                        initial_value=option.default,
-                    )
-                elif option.kind == "checkbox":
-                    handle = self.server.gui.add_checkbox(
-                        option.label,
-                        initial_value=option.default,
-                    )
-                else:
-                    raise ValueError(f"Unsupported option type: {option.kind}")
+                handle = self.server.gui.add_slider(
+                    option.label,
+                    min=option.minimum,
+                    max=option.maximum,
+                    step=option.step or 0.1,
+                    initial_value=option.default,
+                )
+            elif option.kind == "checkbox":
+                handle = self.server.gui.add_checkbox(
+                    option.label,
+                    initial_value=option.default,
+                )
+            else:
+                raise ValueError(f"Unsupported option type: {option.kind}")
 
-                self.option_handles[option.key] = handle
+            self.option_handles[option.key] = handle

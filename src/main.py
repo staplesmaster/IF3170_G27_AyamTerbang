@@ -7,7 +7,12 @@ import viser
 
 from .view.control import Control
 from .repository.parser import Parser
+from .algorithm.steepest_ascent_hc import SteepestAscentHC
+from .algorithm.sideways_move_hc import SidewaysMoveHC
+from .algorithm.random_restart_hc import RandomRestartHC
+from .algorithm.stochastic_hc import StochasticHC
 from .algorithm.simulated_annealing import SimulatedAnnealing
+from .models.objective_alt import ObjectiveAlt
 from .algorithm.genetic_algorithm import GeneticAlgorithm
 from .models.objective_main import ObjectiveMain
 from .models.simple_objective import SimpleObjective
@@ -19,10 +24,15 @@ def main() -> None:
 
     server = viser.ViserServer()
     parser = Parser()
-    objective = SimpleObjective()
-    algorithms = [SimulatedAnnealing(objective), GeneticAlgorithm(ObjectiveMain())]
+    objective = [ObjectiveMain(), ObjectiveAlt()]
+    algorithms = [SteepestAscentHC(objective),
+                  SidewaysMoveHC(objective),
+                  RandomRestartHC(objective),
+                  StochasticHC(objective),
+                  SimulatedAnnealing(objective),
+                  GeneticAlgorithm(objective)]
 
-    control = Control(server, parser, algorithms)
+    control = Control(server, parser, algorithms, objective)
 
     print("Server running")
     while True:

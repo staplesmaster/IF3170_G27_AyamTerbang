@@ -72,38 +72,30 @@ class LocalNeighbor(Neighborhood):
 
     def moves(self, problem: Problem, state: State) -> Iterable[Move]:
         """Langkah neighbor (move) yang diperbolehkan tiap iterasi:
-        1. Menukar dua paket, baik di dalam maupun di luar truk
+        1. Menukar dua paket (keduanya di dalam truk, atau satu di dalam dan satu di luar truk)
         2. Memindahkan sebuah paket ke suatu koordinat yang berbeda
-        3. Merotasi paket 90° terhadap sumbu x, y, atau z
+        3. Merotasi paket di dalam truk 90° terhadap sumbu x, y, atau z
         """
 
         package_by_id = {package.id: package for package in problem.packages}
-        packed = [ps for ps in state.package_states if ps.placement is not None and ps.package_id in package_by_id]
-        unpacked = [ps for ps in state.package_states if ps.placement is None and ps.package_id in package_by_id]
-
-        trucks_by_id = {truck.id: truck for truck in problem.trucks}
-
-        def fits_truck(package, orientation, placement):
-            truck = trucks_by_id.get(placement.truck_id)
-            if truck is None:
-                return False
-            x, y, z = placement.position
-            dx, dy, dz = package.oriented_dimensions(orientation)
-            return (
-                x >= 0 and y >= 0 and z >= 0
-                and x + dx <= truck.dimensions["w"]
-                and y + dy <= truck.dimensions["l"]
-                and z + dz <= truck.dimensions["h"]
-            )
+        packed = [
+            ps
+            for ps in state.package_states
+            if ps.placement is not None and ps.package_id in package_by_id
+        ]
+        unpacked = [
+            ps
+            for ps in state.package_states
+            if ps.placement is None and ps.package_id in package_by_id
+        ]
 
         def placements(package_state):
-            package = package_by_id[package_state.package_id]
             return [
                 Placement(truck.id, (x, y, z))
                 for truck in problem.trucks
-                for x in range(max(0, truck.dimensions["w"] - package.oriented_dimensions(package_state.orientation)[0] + 1))
-                for y in range(max(0, truck.dimensions["l"] - package.oriented_dimensions(package_state.orientation)[1] + 1))
-                for z in range(max(0, truck.dimensions["h"] - package.oriented_dimensions(package_state.orientation)[2] + 1))
+                for x in range(truck.dimensions["w"])
+                for y in range(truck.dimensions["l"])
+                for z in range(truck.dimensions["h"])
             ]
 
         action_groups: list[list[Move]] = []
@@ -111,13 +103,8 @@ class LocalNeighbor(Neighborhood):
         swap_moves = [
             Swap(a.package_id, b.package_id)
             for i, a in enumerate(state.package_states)
-            for b in state.package_states[i + 1:]
-            if (
-                a.package_id in package_by_id
-                and b.package_id in package_by_id
-                and (b.placement is None or fits_truck(package_by_id[a.package_id], a.orientation, b.placement))
-                and (a.placement is None or fits_truck(package_by_id[b.package_id], b.orientation, a.placement))
-            )
+            for b in state.package_states[i + 1 :]
+            if a.placement is not None or b.placement is not None
         ]
         if swap_moves:
             action_groups.append(swap_moves)
@@ -145,11 +132,11 @@ class LocalNeighbor(Neighborhood):
 
         rotate_moves = [
             Rotate(ps.package_id, orientation)
-            for ps in state.package_states
-            if ps.package_id in package_by_id
-            for orientation in package_by_id[ps.package_id].possible_orientations()
+            for ps in packed
+            for orientation in package_by_id[
+                ps.package_id
+            ].possible_orientations()
             if orientation != ps.orientation
-            and (ps.placement is None or fits_truck(package_by_id[ps.package_id], orientation, ps.placement))
         ]
         if rotate_moves:
             action_groups.append(rotate_moves)
@@ -168,4 +155,3 @@ class RandomNeighbor(Neighborhood):
         if not candidates:
             return ()
         return (secrets.choice(candidates),)
-        

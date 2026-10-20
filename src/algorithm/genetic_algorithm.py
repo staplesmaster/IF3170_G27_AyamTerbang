@@ -7,8 +7,7 @@ from .initial_state_factory import InitialStateFactory
 from .local_neighbor import RandomNeighbor
 from ..models.objective import Objective
 from ..models.problem import Problem
-from ..models.result import Result
-from ..models.solution import State
+from ..models.solution import Result, State
 
 
 class GeneticAlgorithm(Algorithm):
@@ -37,8 +36,8 @@ class GeneticAlgorithm(Algorithm):
                             minimum=0.0, maximum=1.0, step=0.01),
         ]
 
-    def solve(self, problem: Problem, state: State, options: dict[str, int | float]) -> State:
-        return self.run(problem, state, options).final_state
+    def solve(self, problem: Problem, state: State, options: dict[str, int | float]) -> Result:
+        return self.run(problem, state, options)
 
     def repair_state(self, problem: Problem, state: State) -> State:
         packages = {}
