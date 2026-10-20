@@ -12,10 +12,10 @@ from .algorithm.sideways_move_hc import SidewaysMoveHC
 from .algorithm.random_restart_hc import RandomRestartHC
 from .algorithm.stochastic_hc import StochasticHC
 from .algorithm.simulated_annealing import SimulatedAnnealing
-from .models.objective_main import ObjectiveMain
 from .models.objective_alt import ObjectiveAlt
+from .algorithm.genetic_algorithm import GeneticAlgorithm
+from .models.objective_main import ObjectiveMain
 from .models.simple_objective import SimpleObjective
-from .algorithm.local_neighbor import RandomNeighbor
 
 
 def main() -> None:
@@ -29,7 +29,8 @@ def main() -> None:
                   SidewaysMoveHC(objective),
                   RandomRestartHC(objective),
                   StochasticHC(objective),
-                  SimulatedAnnealing(objective)]
+                  SimulatedAnnealing(objective),
+                  GeneticAlgorithm(objective)]
 
     control = Control(server, parser, algorithms)
 

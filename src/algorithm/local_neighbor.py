@@ -155,4 +155,3 @@ class RandomNeighbor(Neighborhood):
         if not candidates:
             return ()
         return (secrets.choice(candidates),)
-        
