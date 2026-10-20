@@ -211,7 +211,7 @@ class Control:
         # Informasi tambahan spesifik Simulated Annealing
         if result.random_walk_history or "Simulated Annealing" in algorithm_name:
             lines.append(
-                f"- **Frekuensi Stuck (Local Optima):** `{result.stuck_frequency}`"
+                f"- **Frekuensi Stuck:** `{result.stuck_frequency}`"
             )
 
         self.statsFolder = self.server.gui.add_folder("Statistik Hasil Pencarian")
@@ -242,14 +242,14 @@ class Control:
             if result.random_walk_history:
                 rw_img = self._create_line_plot_image(
                     values=result.random_walk_history,
-                    title="Probabilitas exp(deltaE / T) terhadap Iterasi",
+                    title="Probabilitas e^(deltaE / T) terhadap Iterasi",
                     xlabel="Iterasi",
-                    ylabel="exp(deltaE / T)",
+                    ylabel="e^(deltaE / T)",
                     color="#d97706",
                     ylim=(0.0, 1.05),
                 )
                 self.server.gui.add_image(
-                    rw_img, label="Plot exp(deltaE / T) vs Iterasi"
+                    rw_img, label="Plot e^(deltaE / T) vs Iterasi"
                 )
 
     def _create_line_plot_image(
@@ -267,6 +267,7 @@ class Control:
 
             matplotlib.use("Agg")
             import matplotlib.pyplot as plt
+            from matplotlib.ticker import MaxNLocator
             from PIL import Image
 
             fig, ax = plt.subplots(figsize=(5.0, 3.2), dpi=120)
@@ -285,6 +286,7 @@ class Control:
             ax.set_title(title, fontsize=10, fontweight="bold", pad=8)
             ax.set_xlabel(xlabel, fontsize=8.5)
             ax.set_ylabel(ylabel, fontsize=8.5)
+            ax.xaxis.set_major_locator(MaxNLocator(integer=True))
             if ylim is not None:
                 ax.set_ylim(*ylim)
             ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.6)

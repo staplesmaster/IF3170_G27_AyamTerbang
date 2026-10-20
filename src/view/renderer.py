@@ -57,47 +57,125 @@ class Renderer:
             )
 
     def _render_trucks(self):
-        gap = 2.0
-        wallThickness = 0.2
+        gap = 3.0
+        line_t = 0.04  # Ketebalan garis grid
+        grid_color = (90, 105, 125)
+        frame_color = (40, 50, 65)
+
         totalWidth = sum(t.dimensions["w"] for t in self.problem.trucks)
         totalWidth += gap * max(len(self.problem.trucks) - 1, 0)
         truckX = -totalWidth / 2
 
         for t in self.problem.trucks:
-            width = t.dimensions["w"]
-            truckLength = t.dimensions["l"]
-            truckHeight = t.dimensions["h"]
-            centerX = truckX + width / 2
+            w = t.dimensions["w"]
+            l = t.dimensions["l"]
+            h = t.dimensions["h"]
             self.truckOrigins[t.id] = (truckX, 0.0)
-            centerY = truckLength / 2
-            wallCenterZ = truckHeight / 2 + wallThickness
-            self.truckHandles.extend((
-                self.server.scene.add_box(
-                    name=f"{t.id}/base",
-                    position=(centerX, centerY, wallThickness / 2),
-                    dimensions=(width, truckLength, wallThickness),
-                    color=self.TRUCK_BASE_COLOR,
-                ),
-                self.server.scene.add_box(
-                    name=f"{t.id}/left",
-                    position=(centerX - width / 2, centerY, wallCenterZ),
-                    dimensions=(wallThickness, truckLength, truckHeight),
-                    color=self.TRUCK_WALL_COLOR,
-                ),
-                self.server.scene.add_box(
-                    name=f"{t.id}/right",
-                    position=(centerX + width / 2, centerY, wallCenterZ),
-                    dimensions=(wallThickness, truckLength, truckHeight),
-                    color=self.TRUCK_WALL_COLOR,
-                ),
-                self.server.scene.add_box(
-                    name=f"{t.id}/front",
-                    position=(centerX, centerY + truckLength / 2, wallCenterZ),
-                    dimensions=(width, wallThickness, truckHeight),
-                    color=self.TRUCK_WALL_COLOR,
-                ),
-            ))
-            truckX += width + gap
+
+            # 1. Grid Alas (Bidang XY pada z = 0)
+            for ix in range(w + 1):
+                is_edge = ix in (0, w)
+                self.truckHandles.append(
+                    self.server.scene.add_box(
+                        name=f"{t.id}/grid/base_x_{ix}",
+                        position=(truckX + ix, l / 2, 0.0),
+                        dimensions=(line_t, l, line_t),
+                        color=frame_color if is_edge else grid_color,
+                    )
+                )
+            for iy in range(l + 1):
+                is_edge = iy in (0, l)
+                self.truckHandles.append(
+                    self.server.scene.add_box(
+                        name=f"{t.id}/grid/base_y_{iy}",
+                        position=(truckX + w / 2, iy, 0.0),
+                        dimensions=(w, line_t, line_t),
+                        color=frame_color if is_edge else grid_color,
+                    )
+                )
+
+            # 2. Grid Dinding Kiri (x = 0) & Kanan (x = w) (Bidang YZ)
+            for side_name, x_pos in (("left", truckX), ("right", truckX + w)):
+                for iy in range(l + 1):
+                    is_edge = iy in (0, l)
+                    self.truckHandles.append(
+                        self.server.scene.add_box(
+                            name=f"{t.id}/grid/{side_name}_y_{iy}",
+                            position=(x_pos, iy, h / 2),
+                            dimensions=(line_t, line_t, h),
+                            color=frame_color if is_edge else grid_color,
+                        )
+                    )
+                for iz in range(1, h + 1):
+                    is_edge = iz == h
+                    self.truckHandles.append(
+                        self.server.scene.add_box(
+                            name=f"{t.id}/grid/{side_name}_z_{iz}",
+                            position=(x_pos, l / 2, iz),
+                            dimensions=(line_t, l, line_t),
+                            color=frame_color if is_edge else grid_color,
+                        )
+                    )
+
+            # 3. Grid Dinding Belakang (y = l) (Bidang XZ)
+            for ix in range(1, w):
+                self.truckHandles.append(
+                    self.server.scene.add_box(
+                        name=f"{t.id}/grid/back_x_{ix}",
+                        position=(truckX + ix, l, h / 2),
+                        dimensions=(line_t, line_t, h),
+                        color=grid_color,
+                    )
+                )
+            for iz in range(1, h + 1):
+                is_edge = iz == h
+                self.truckHandles.append(
+                    self.server.scene.add_box(
+                        name=f"{t.id}/grid/back_z_{iz}",
+                        position=(truckX + w / 2, l, iz),
+                        dimensions=(w, line_t, line_t),
+                        color=frame_color if is_edge else grid_color,
+                    )
+                )
+
+            def get_step(size: int) -> int:
+                if size <= 10:
+                    return 1
+                elif size <= 50:
+                    return 5
+                return 10
+
+            step_x = get_step(w)
+            step_y = get_step(l)
+            step_z = get_step(h)
+
+            # 4. Angka Koordinat sesuai skala (1..10, 5..50, atau 10..100)
+            for ix in range(step_x, w + 1, step_x):
+                self.truckHandles.append(
+                    self.server.scene.add_label(
+                        name=f"{t.id}/label/x_{ix}",
+                        text=str(ix),
+                        position=(truckX + ix - 0.5, -0.35, 0.0),
+                    )
+                )
+            for iy in range(step_y, l + 1, step_y):
+                self.truckHandles.append(
+                    self.server.scene.add_label(
+                        name=f"{t.id}/label/y_{iy}",
+                        text=str(iy),
+                        position=(truckX - 0.35, iy - 0.5, 0.0),
+                    )
+                )
+            for iz in range(step_z, h + 1, step_z):
+                self.truckHandles.append(
+                    self.server.scene.add_label(
+                        name=f"{t.id}/label/z_{iz}",
+                        text=str(iz),
+                        position=(truckX - 0.35, 0.0, iz - 0.5),
+                    )
+                )
+
+            truckX += w + gap
 
     def _render_packages(self, state: State):
         package_states = {
