@@ -8,8 +8,9 @@ import viser
 from .view.control import Control
 from .repository.parser import Parser
 from .algorithm.simulated_annealing import SimulatedAnnealing
+from .algorithm.genetic_algorithm import GeneticAlgorithm
+from .models.objective_main import ObjectiveMain
 from .models.simple_objective import SimpleObjective
-from .algorithm.local_neighbor import RandomNeighbor
 
 
 def main() -> None:
@@ -19,7 +20,7 @@ def main() -> None:
     server = viser.ViserServer()
     parser = Parser()
     objective = SimpleObjective()
-    algorithms = [SimulatedAnnealing(objective)]
+    algorithms = [SimulatedAnnealing(objective), GeneticAlgorithm(ObjectiveMain())]
 
     control = Control(server, parser, algorithms)
 
